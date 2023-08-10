@@ -210,7 +210,7 @@ DEG <- decideTestsDGE(exact_test_results, adjust.method = "BH", p.value = 0.05)
 summary(DEG)
 ```
 
-# Visualizing differentially expressed genes (DEGs)
+#Visualizing differentially expressed genes (DEGs)
 
 ```
 de1tags12 <- rownames(df)[as.logical(DEG)] 
@@ -226,7 +226,7 @@ abline(h = c(-2, 2), col = "blue")
 Heatmap(rawcounts, name = "Expression", cluster_columns = TRUE, show_column_dend = FALSE, cluster_column_slices = TRUE, column_title_gp = gpar(fontsize = 8), column_gap = unit(0.5, "mm"), cluster_rows = TRUE, show_row_dend = FALSE,row_names_gp = gpar(fontsize = 4), column_title_rot = 90, top_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = scales::hue_pal()(9)))), show_column_names = FALSE, use_raster = TRUE, raster_quality = 4)
 ```
 
-# Correcting p-values(FDR-corrected) for multiple comparisons using Benjamin and Hochberg method
+#Correcting p-values(FDR-corrected) for multiple comparisons using Benjamin and Hochberg method
 #This is used to identify genes that are both upregulated and statistically significant after FDR correction.
 
 ```
