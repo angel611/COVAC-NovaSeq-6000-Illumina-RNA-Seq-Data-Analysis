@@ -149,19 +149,16 @@ Batcheffectsremoved <- ComBat(df, batch = batch_variable)
 
 
 #Normalising data using edgeR
+
 ```
 d <- calcNormFactors(df)
+# Adjust raw counts to normalized counts using normalization factors
+normalized_counts <- cpm(df, normalized.lib.sizes = d$norm.factors)
+#The cpm() function calculates CPM-normalized counts using the provided normalization factors.
 ```
 
-#Determine the differentially expressed genes between visits and between groups using edgeR
-
-#Create a DGE list\*\* #edgeR works on a table of integer read counts, with rows corresponding to genes and columns to independent libraries. edgeR stores data in a simple list-based data object called a DGEList. This type of object is easy to use because it can be manipulated like any list in R. You can make this in R by specifying the counts and the groups in the function DGEList().
-
-```
-d <- DGEList(counts=as.matrix(df))
-d$samples
-```
 #Filtering the data #First get rid of genes which do not occur frequently enough. We can choose this cutoff by saying we must have at least 100 counts per million (calculated with cpm() in R on any particular gene that we want to keep. #Here, we're only keeping a gene if it has a cpm of 100 or greater for at least two samples.
+#Filtering reduces the dataset so there is very little power to detect differential expression, so little information is lost by filtering. After filtering, it is a good idea to reset the library sizes
 
 ```
 dim(d)
@@ -172,218 +169,77 @@ d <- d[keep,]
 dim(d)
 ```
 
-#Filtering reduces the dataset so there is very little power to detect differential expression, so little information is lost by filtering. After filtering, it is a good idea to reset the library sizes
+#Determine the differentially expressed genes between visits and between groups using edgeR
 
-```{r}
-d$samples$lib.size <- colSums(d$counts)
-d$samples
+#Create a DGE list\*\* #edgeR works on a table of integer read counts, with rows corresponding to genes and columns to independent libraries. edgeR stores data in a simple list-based data object called a DGEList. This type of object is easy to use because it can be manipulated like any list in R. You can make this in R by specifying the counts and the groups in the function DGEList().
+
+
+```
+# Assuming you have sample information stored in a data frame 'sample_info'
+
+# Create a DGEList object from normalized counts
+dge <- DGEList(counts = normalized_counts, group = sample_info$group_column)
+# Perform differential expression analysis
+dge <- calcNormFactors(dge)
+design <- model.matrix(~group_column, data = sample_info)
+dge <- estimateDisp(dge, design)
+fit <- glmQLFit(dge, design)
+results <- glmQLFTest(fit, contrast = "group_column")
+# Access differential expression results
+top_diff_genes <- topTags(results, n = 10)
 ```
 
+#Second method of differential expression
 
 #Differential Expression #The function exactTest() conducts tagwise tests using the exact negative binomial test. The test results for the n most significant tags are conveniently displayed by the topTags() function. By default, Benjamini and Hochberg's algorithm is used to control the false discovery rate (FDR).
 
 ```
-design <- ~ Batch
-d$samples$group <- rep(c("group1", "group2"))
-DG <- estimateDisp(d,robust=TRUE)
-Group <- exactTest(DG, pair=c("group1","group2")) 
+# Perform exact test for differential expression
+exact_test_results <- exactTest(dge)
+# Display top significant genes
+top_diff_genes <- topTags(exact_test_results, n = 10)
 ```
 
-#The total number of differentially expressed genes at FDR\< 0:05 is:
+#Identify differentially expressed genes (DEGs) based on the results of a differential expression analysis. 
+#"BH" refers to the Benjamini-Hochberg method, which controls the false discovery rate (FDR) when dealing with multiple hypothesis tests
 
 ```
-DEG <- decideTestsDGE(Group, adjust.method="BH", p.value=0.05)
+# Assuming 'exact_test_results' contains the results of a differential expression analysis
+DEG <- decideTestsDGE(exact_test_results, adjust.method = "BH", p.value = 0.05)
+# Summary of the results
 summary(DEG)
 ```
 
-# differentially expressed tags from the naive method in d1
+# Visualizing differentially expressed genes (DEGs)
 
 ```
-de1tags12 <- rownames(d)[as.logical(DEG)] 
-plotSmear(Group, de.tags=de1tags12)
+de1tags12 <- rownames(df)[as.logical(DEG)] 
+plotSmear(exact_test_results, de.tags=de1tags12)
 abline(h = c(-2, 2), col = "blue")
 ```
 
-#Plot MA
-
-```
-plotMA(d, ylim=c(-2,2))
-```
 #Adding more information to gene expression matrix
 
 #Heat map
 
-```{r}
+```
 Heatmap(rawcounts, name = "Expression", cluster_columns = TRUE, show_column_dend = FALSE, cluster_column_slices = TRUE, column_title_gp = gpar(fontsize = 8), column_gap = unit(0.5, "mm"), cluster_rows = TRUE, show_row_dend = FALSE,row_names_gp = gpar(fontsize = 4), column_title_rot = 90, top_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = scales::hue_pal()(9)))), show_column_names = FALSE, use_raster = TRUE, raster_quality = 4)
 ```
 
-# Correcting p-values for multiple comparisons using Benjamin and Hochberg method
+# Correcting p-values(FDR-corrected) for multiple comparisons using Benjamin and Hochberg method
+#This is used to identify genes that are both upregulated and statistically significant after FDR correction.
 
-```{r}
+```
 library(dplyr)
 alpha <- .05
-
 diffexp <- df %>%
-   mutate(padj = p.adjust(0.05, method="BH")) %>%
+   mutate(padj = p.adjust(p_value, method="BH")) %>%
    filter(log2FC > 0, padj < alpha)
 ```
-
-```{r}
+```
 # Create a basic volcano plot
-ggplot(data = severevshealthy_degresults_1, aes(x = log2fc, y = -log10(pval))) +
-         geom_point()
+ggplot(data = diff_data, aes(x = log2fc, y = -log10(pval))) +
+  geom_point() +
+  labs(x = "Log2 Fold Change", y = "-log10(p-value)",
+       title = "Volcano Plot of Differentially Expressed Genes")
 ```
-
-#Pathway enrivhment analysis
-
-```{r}
-GO_file = "/Users/admin/Desktop/Gene\ counts/h.all.v2023.1.Hs.symbols.gmt.txt "
-GSEA = function(df, GO_file, pval = 0.05) {
-  set.seed(54321)
-  library(dplyr)
-  library(fgsea)
-
-  if ( any( duplicated(names(gene_list)) )  ) {
-    warning("Duplicates in gene names")
-    gene_list = gene_list[!duplicated(names(gene_list))]
-  }
-  if  ( !all( order(gene_list, decreasing = TRUE) == 1:length(gene_list)) ){
-    warning("Gene list not sorted")
-    gene_list = sort(gene_list, decreasing = TRUE)
-  }
-  myGO = fgsea::gmtPathways(GO_file)
-
-  fgRes <- fgsea::fgsea(pathways = myGO,
-                           stats = gene_list,
-                           minSize=15, ## minimum gene set size
-                           maxSize=400, ## maximum gene set size
-                           nperm=10000) %>% 
-                  as.data.frame() %>% 
-                  dplyr::filter(padj < !!pval) %>% 
-                  arrange(desc(NES))
-  message(paste("Number of signficant gene sets =", nrow(fgRes)))
-
-  message("Collapsing Pathways -----")
-  concise_pathways = collapsePathways(data.table::as.data.table(fgRes),
-                                      pathways = myGO,
-                                      stats = gene_list)
-  fgRes = fgRes[fgRes$pathway %in% concise_pathways$mainPathways, ]
-  message(paste("Number of gene sets after collapsing =", nrow(fgRes)))
-
-  fgRes$Enrichment = ifelse(fgRes$NES > 0, "Up-regulated", "Down-regulated")
-  filtRes = rbind(head(fgRes, n = 10),
-                  tail(fgRes, n = 10 ))
-
-  total_up = sum(fgRes$Enrichment == "Up-regulated")
-  total_down = sum(fgRes$Enrichment == "Down-regulated")
-  header = paste0("Top 10 (Total pathways: Up=", total_up,", Down=",    total_down, ")")
-
-  colos = setNames(c("firebrick2", "dodgerblue2"),
-                 c("Up-regulated", "Down-regulated"))
-
-g1= ggplot(filtRes, aes(reorder(pathway, NES), NES)) +
-  geom_point( aes(fill = Enrichment, size = size), shape=21) +
-  scale_fill_manual(values = colos ) +
-  scale_size_continuous(range = c(2,10)) +
-  geom_hline(yintercept = 0) +
-  coord_flip() +
-  labs(x="Pathway", y="Normalized Enrichment Score",
-       title=header) + 
-        th
-
-  output = list("Results" = fgRes, "Plot" = g1)
-  return(output)
-}
-```
-
-
-```{r}
-library(dplyr)
-
-S4table = read.csv("/Users/admin/Desktop/Gene\ counts/Copy\ of\ pone.0145322.s006.csv", header=TRUE, skip =1) %>%
-  filter(Gene.Symbol != "")
-gene_list = S4table$DESeq2.Log2.Fold.Change
-names(gene_list) = S4table$Gene.Symbol
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-GO_file = "/Users/admin/Desktop/Gene/counts/h.all.v2023.1.Hs.symbols.gmt.txt "
-res = GSEA(gene_list, GO_file, pval = 0.05)
-dim(res$Results)
-## [1] 159   9
-res$Plot
-plot_geneset_clusters = function( gs_results, GO_file, min.sz = 4, main="GSEA clusters"){
-  library(ggplot2)
-  library(ggrepel)
-  library(stringr)
-
-  myGO = fgsea::gmtPathways(GO_file)
-  df = matrix(nrow=nrow(gs_results), ncol = nrow(gs_results), data = 0)
-  rownames(df) = colnames(df) = gs_results$pathway
-
-  for ( i in 1:nrow(gs_results)) {
-    genesI =  unlist(myGO[names(myGO) == gs_results$pathway[i] ])
-    for (j in 1:nrow(gs_results)) {
-      genesJ = unlist(myGO[names(myGO) == gs_results$pathway[j] ])
-      ## Jaccards distance  1 - (intersection / union )
-      overlap = sum(!is.na(match(genesI, genesJ )))
-      jaccards = overlap / length(unique(c(genesI, genesJ) ))
-      df[i,j] = 1-jaccards
-    }
-  }
-
-  ## Cluster nodes using dynamic tree cut, for colors
-  distMat = as.dist(df)
-  dendro = hclust(distMat, method = "average" )
-  clust = dynamicTreeCut::cutreeDynamicTree( dendro, minModuleSize = min.sz )
-  ## Note: in dynamicTreeCut, cluster 0, is a garbage cluster for things that dont cluster, so we remove it
-
-  gs_results$Cluster = clust
-  gs_results = gs_results[gs_results$Cluster != 0, ]
-
-  ## select gene sets to label for each clusters
-  bests = gs_results %>%  
-    group_by( Cluster ) %>% 
-    top_n(wt = abs(size), n = 1) %>% 
-    .$pathway
-  ## determine cluster order for plotting
-  clust_ords = gs_results %>% 
-    group_by( Cluster ) %>% 
-    summarise("Average" = NES ) %>% 
-    arrange(desc(Average)) %>% 
-    .$Cluster %>% 
-    unique
-
-  gs_results$Cluster = factor(gs_results$Cluster, levels = clust_ords)
-
-  gs_results$Label = ""
-  gs_results$Label[gs_results$pathway %in% bests ] = gs_results$pathway[gs_results$pathway %in% bests ]
-  gs_results$Label = str_remove(gs_results$Label, "GO_")
-  gs_results$Label = tolower(gs_results$Label)
-
-  g1 = ggplot(gs_results, aes(x = Cluster, y = NES, label = Label )) +
-    geom_jitter( aes(color = Cluster,  size = size), alpha = 0.8, height = 0, width = 0.2 ) +
-    scale_size_continuous(range = c(0.5,5)) +
-    geom_text_repel( force = 2, max.overlaps = Inf) +
-    ggtitle(main) +
-    th
-
-return(g1)
-}
-plot_geneset_clusters( gs_results = res$Results[res$Results$NES > 0, ], 
-                       main = "Up-regulated GSEA clusters",
-                                  GO_file = GO_file,
-                                  min.sz = 4 )
-
-plot_geneset_clusters( gs_results = res$Results[res$Results$NES < 0, ], 
-                       main = "Down-regulated GSEA clusters",
-                                  GO_file = GO_file,
-                                  min.sz = 4 )
-```
-#Data exploration
-
-```{r}
-plotMDS(d, method="bcv",labels = NULL, pch = NULL, cex = 1,
-     dim.plot = c(1,2), gene.selection = "pairwise",xlab = NULL, ylab = NULL, plot = TRUE, var.explained = TRUE)
-```
-
