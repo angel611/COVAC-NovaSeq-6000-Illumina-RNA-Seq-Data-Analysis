@@ -209,7 +209,6 @@ DEG <- decideTestsDGE(exact_test_results, adjust.method = "BH", p.value = 0.05)
 # Summary of the results
 summary(DEG)
 ```
-
 #Visualizing differentially expressed genes (DEGs)
 
 ```
