@@ -1,4 +1,4 @@
-# COVAC-NovaSeq-6000-Illumina-RNA-Seq-Data-Analysis
+# COVAC-DNBSEQ-RNA-Seq-Data-Analysis
 
 ## Installation
 
