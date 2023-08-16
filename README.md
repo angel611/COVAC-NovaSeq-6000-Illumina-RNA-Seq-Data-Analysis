@@ -1,4 +1,4 @@
-# COVAC-DNBSEQ-RNA-Seq-Data-Analysis
+# MGI-DNBSEQ-RNA-Seq-Data-Analysis
 
 ## Installation
 
