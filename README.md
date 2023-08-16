@@ -81,37 +81,45 @@ for i in `ls *.fastq`; do echo $(cat ${i} | wc -l)/4|bc;
 ```
 Look at the bam file
 
-```/usr/local/Cellar/samtools/1.17/bin/samtools view -h sample5Aligned.sortedByCoord.out.bam | less```
+```
+/usr/local/Cellar/samtools/1.17/bin/samtools view -h sample5Aligned.sortedByCoord.out.bam | less
+```
 
 Basic alignment/mapping summary
 
-```/usr/local/Cellar/samtools/1.17/bin/samtools flagstat sample5Aligned.sortedByCoord.out.bam```
+```
+/usr/local/Cellar/samtools/1.17/bin/samtools flagstat sample5Aligned.sortedByCoord.out.bam
+```
 
 Subasample FASTQ files to pick a Million reads incase sub-sampling is needed
 
-```seqtk sample -s100 sample5_1.fq 1000000 > sample5_sub_1.fq```
-```seqtk sample -s100 sample5_2.fq 1000000 > sample5_sub_2fq```
+```
+seqtk sample -s100 sample5_1.fq 1000000 > sample5_sub_1.fq
+seqtk sample -s100 sample5_2.fq 1000000 > sample5_sub_2fq
+```
 
-Counting paired reads after trimming
+Counting paired and unpaired reads after trimming
 
-```for i in `ls paired_trimmed*.fq`; do echo $(cat ${i} | wc -l)/4|bc; done```
-
-Counting unpaired reads after trimming
-
-```for i in `ls unpaired_trimmed*.fq`; do echo $(cat ${i} | wc -l)/4|bc; done```
+```
+for i in `ls paired_trimmed*.fq`; do echo $(cat ${i} | wc -l)/4|bc; done
+for i in `ls unpaired_trimmed*.fq`; do echo $(cat ${i} | wc -l)/4|bc; done
+```
 
 Run HTSEQ - for counting gene abundance
 
-```htseq-count --stranded=yes --idattr=ID --type=gene --mode=union --format=bam SRR629561Aligned.sortedByCoord.out.bam gencode.v29.annotation.gff3 > sample5_pergene_counts.txt```
+```
+htseq-count --stranded=yes --idattr=ID --type=gene --mode=union --format=bam SRR629561Aligned.sortedByCoord.out.bam gencode.v29.annotation.gff3 > sample5_pergene_counts.txt
+```
 
 Counting the gene abundance from different files. Create a loop.Put the file in the same directory as the bam files and run the command below in terminal.
 
 ```
 bash htseq-batch.sh
 ```
+
 Proceed to R and import the gene counts in R
 
-#Load the packages
+### Load the packages
 
 ```
 pacman::p_load(sva, edgeR, tidyverse,ggplot2,limma,ComplexHeatmap,circlize, volcanoPlot,tidyverse,dplyr,RColorBrewer,ggrepel,fgsea)
